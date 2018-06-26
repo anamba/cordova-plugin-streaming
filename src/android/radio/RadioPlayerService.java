@@ -1,10 +1,12 @@
 package com.imsd.radio;
 
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.AudioTrack;
@@ -53,6 +55,7 @@ public class RadioPlayerService extends Service implements PlayerCallback {
      * Notification ID
      */
     private static final int NOTIFICATION_ID = 001;
+    private static final String NOTIFICATION_CHANNEL_ID = "nc_now_playing";
 
     /**
      * Logging control variable
@@ -170,8 +173,8 @@ public class RadioPlayerService extends Service implements PlayerCallback {
      */
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-
         String action = intent.getAction();
+        Log.d("Intent received by RadioPlayerService:", action);
 
         /**
          * If cancel clicked on notification, then set state to
@@ -182,8 +185,8 @@ public class RadioPlayerService extends Service implements PlayerCallback {
                 isClosedFromNotification = true;
                 stop();
             }
-            if (mNotificationManager != null)
-                mNotificationManager.cancel(NOTIFICATION_ID);
+            // if (mNotificationManager != null)
+            //     mNotificationManager.cancel(NOTIFICATION_ID);
         }
         /**
          * If play/pause action clicked on notification,
@@ -195,6 +198,14 @@ public class RadioPlayerService extends Service implements PlayerCallback {
             else if (mRadioUrl != null)
                 play(mRadioUrl);
 
+        } else if (action.equals(NOTIFICATION_INTENT_OPEN_PLAYER)) {
+            PackageManager packageManager = getPackageManager();
+            Intent i = packageManager.getLaunchIntentForPackage(getPackageName());
+            if (i != null) {
+                i.setPackage(null);
+                i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                startActivity(i);
+            }
         }
 
         return START_NOT_STICKY;
@@ -298,7 +309,6 @@ public class RadioPlayerService extends Service implements PlayerCallback {
 
     @Override
     public void playerStopped(int i) {
-
         mRadioState = State.STOPPED;
 
         /**
@@ -313,13 +323,12 @@ public class RadioPlayerService extends Service implements PlayerCallback {
             isClosedFromNotification = false;
 
         mLock = false;
-        mNotificationManager.cancel(NOTIFICATION_ID);
+        // mNotificationManager.cancel(NOTIFICATION_ID);
+        stopForeground(true);
         log("Player stopped. State : " + mRadioState);
 
         if (isSwitching)
             play(mRadioUrl);
-
-
     }
 
     @Override
@@ -518,7 +527,6 @@ public class RadioPlayerService extends Service implements PlayerCallback {
          */
 
         RemoteViews mNotificationTemplate = new RemoteViews(this.getPackageName(), fakeR.getId("layout", "notification"));
-        Notification.Builder notificationBuilder = new Notification.Builder(this);
 
         /**
          * set small notification texts and image
@@ -539,16 +547,29 @@ public class RadioPlayerService extends Service implements PlayerCallback {
 
 
         /**
+         * Create notification channel
+         */
+        // The user-visible name and description of the channel
+        String name = "Now Playing";
+        String description = "Player info and controls for streaming radio";
+
+        int importance = NotificationManager.IMPORTANCE_LOW;
+        NotificationChannel mChannel = new NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance);
+        mChannel.setDescription(description);
+
+        /**
          * Create notification instance
          */
-        Notification notification = notificationBuilder
+        mNotificationManager.createNotificationChannel(mChannel);
+        Notification notification = new Notification.Builder(this)
                 .setSmallIcon(smallImage)
                 .setContentIntent(openPending)
                 .setPriority(Notification.PRIORITY_DEFAULT)
+                .setChannelId(NOTIFICATION_CHANNEL_ID)
                 .setContent(mNotificationTemplate)
                 .setUsesChronometer(true)
                 .build();
-        notification.flags = Notification.FLAG_ONGOING_EVENT;
+        // notification.flags = Notification.FLAG_ONGOING_EVENT;
 
         /**
          * Expanded notification
@@ -560,16 +581,19 @@ public class RadioPlayerService extends Service implements PlayerCallback {
             mExpandedView.setTextViewText(fakeR.getId("id", "notification_line_one"), singerName);
             mExpandedView.setTextViewText(fakeR.getId("id", "notification_line_two"), songName);
             mExpandedView.setImageViewResource(fakeR.getId("id", "notification_expanded_play"), isPlaying() ? fakeR.getId("drawable", "btn_playback_pause") : fakeR.getId("drawable", "btn_playback_play"));
-                    mExpandedView.setImageViewBitmap(fakeR.getId("id", "notification_image"), artImage);
+            mExpandedView.setImageViewBitmap(fakeR.getId("id", "notification_image"), artImage);
 
-                            mExpandedView.setOnClickPendingIntent(fakeR.getId("id", "notification_collapse"), cancelPending);
-                                    mExpandedView.setOnClickPendingIntent(fakeR.getId("id", "notification_expanded_play"), playPausePending);
+            mExpandedView.setOnClickPendingIntent(fakeR.getId("id", "notification_collapse"), cancelPending);
+            mExpandedView.setOnClickPendingIntent(fakeR.getId("id", "notification_expanded_play"), playPausePending);
 
-                                            notification.bigContentView = mExpandedView;
+            notification.bigContentView = mExpandedView;
         }
 
-        if (mNotificationManager != null)
-            mNotificationManager.notify(NOTIFICATION_ID, notification);
+        // if (mNotificationManager != null) {
+            // mNotificationManager.notify(NOTIFICATION_ID, notification);
+        // }
+        startForeground(NOTIFICATION_ID, notification);
+        Log.d("LOG", "Displayed notification");
     }
 
     public void updateNotification(String singerName, String songName, int smallImage, int artImage) {
@@ -577,17 +601,17 @@ public class RadioPlayerService extends Service implements PlayerCallback {
         this.songName = songName;
         this.smallImage = smallImage;
         this.artImage = BitmapFactory.decodeResource(getResources(), artImage);
+        stopForeground(true);
         buildNotification();
     }
-
 
     public void updateNotification(String singerName, String songName, int smallImage, Bitmap artImage) {
         this.singerName = singerName;
         this.songName = songName;
         this.smallImage = smallImage;
         this.artImage = artImage;
+        stopForeground(true);
         buildNotification();
     }
-
 
 }

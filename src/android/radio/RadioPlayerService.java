@@ -553,29 +553,29 @@ public class RadioPlayerService extends Service implements PlayerCallback {
         String name = "Now Playing";
         String description = "Player info and controls for streaming radio";
 
-        int importance = NotificationManager.IMPORTANCE_LOW;
-        NotificationChannel mChannel = new NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance);
-        mChannel.setDescription(description);
-
         /**
          * Create notification instance
          */
-        mNotificationManager.createNotificationChannel(mChannel);
-        Notification notification = new Notification.Builder(this)
+        Notification.Builder builder = new Notification.Builder(this)
                 .setSmallIcon(smallImage)
                 .setContentIntent(openPending)
                 .setPriority(Notification.PRIORITY_DEFAULT)
-                .setChannelId(NOTIFICATION_CHANNEL_ID)
                 .setContent(mNotificationTemplate)
-                .setUsesChronometer(true)
-                .build();
+                .setUsesChronometer(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            int importance = NotificationManager.IMPORTANCE_LOW;
+            NotificationChannel mChannel = new NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance);
+            mChannel.setDescription(description);
+            mNotificationManager.createNotificationChannel(mChannel);
+            builder = builder.setChannelId(NOTIFICATION_CHANNEL_ID);
+        }
+        Notification notification = builder.build();
         // notification.flags = Notification.FLAG_ONGOING_EVENT;
 
         /**
          * Expanded notification
          */
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-
             RemoteViews mExpandedView = new RemoteViews(this.getPackageName(), fakeR.getId("layout", "notification_expanded"));
 
             mExpandedView.setTextViewText(fakeR.getId("id", "notification_line_one"), singerName);
@@ -605,6 +605,7 @@ public class RadioPlayerService extends Service implements PlayerCallback {
         buildNotification();
     }
 
+
     public void updateNotification(String singerName, String songName, int smallImage, Bitmap artImage) {
         this.singerName = singerName;
         this.songName = songName;
@@ -613,5 +614,6 @@ public class RadioPlayerService extends Service implements PlayerCallback {
         stopForeground(true);
         buildNotification();
     }
+
 
 }
